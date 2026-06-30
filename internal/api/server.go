@@ -178,6 +178,12 @@ func (s *Server) allowLoginAttempt(ip string, now time.Time) bool {
 
 func (s *Server) newRouter() *gin.Engine {
 	r := gin.Default()
+	// 不信任任何反向代理传来的 X-Forwarded-For / X-Real-IP，
+	// 否则 c.ClientIP()（登录限流、审计日志都依赖它）可被客户端任意伪造。
+	// 如果部署在反代之后，应在此显式列出反代的真实 IP/CIDR，而不是信任所有来源。
+	if err := r.SetTrustedProxies(nil); err != nil {
+		logger.Error("设置 Gin 信任代理列表失败", "err", err)
+	}
 	r.Use(s.requestIDMiddleware())
 
 	r.GET("/ping", func(c *gin.Context) {
