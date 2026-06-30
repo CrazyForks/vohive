@@ -24,10 +24,20 @@ type CardPolicy struct {
 
 func (CardPolicy) TableName() string { return "card_policies" }
 
+// CanonicalICCID 规整 ICCID 为唯一形态：trim 空白、去引号、去尾部 BCD 填充位 F/f。
+// 必须用于 card_policies 的所有读写边界——否则 eSIM profile 侧（BCD 解码已剥 F）与
+// 运行时身份侧（QMI DMS 原样保留 F）会落成两行不同的策略，UI 读到的对不上。
+func CanonicalICCID(iccid string) string {
+	v := strings.TrimSpace(iccid)
+	v = strings.Trim(v, "\"")
+	v = strings.TrimRight(v, "Ff")
+	return v
+}
+
 // DefaultCardPolicy 是新卡自动建档用的硬编码安全默认（不落配置文件）。
 func DefaultCardPolicy(iccid string) CardPolicy {
 	return CardPolicy{
-		ICCID:           strings.TrimSpace(iccid),
+		ICCID:           CanonicalICCID(iccid),
 		NetworkEnabled:  false,
 		VoWiFiEnabled:   false,
 		AirplaneEnabled: false,
@@ -46,7 +56,7 @@ func NormalizeCardPolicy(p *CardPolicy) {
 	if p == nil {
 		return
 	}
-	p.ICCID = strings.TrimSpace(p.ICCID)
+	p.ICCID = CanonicalICCID(p.ICCID)
 	switch strings.TrimSpace(p.IPVersion) {
 	case "v4", "v6", "v4v6":
 		p.IPVersion = strings.TrimSpace(p.IPVersion)
@@ -60,7 +70,7 @@ var ErrCardPolicyNotFound = errors.New("card policy not found")
 
 // GetCardPolicy 读一行；缺失返回 ErrCardPolicyNotFound。
 func GetCardPolicy(iccid string) (CardPolicy, error) {
-	iccid = strings.TrimSpace(iccid)
+	iccid = CanonicalICCID(iccid)
 	if iccid == "" || DB == nil {
 		return CardPolicy{}, ErrCardPolicyNotFound
 	}

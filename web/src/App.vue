@@ -4,6 +4,9 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import LoadingScreen from './components/LoadingScreen.vue'
 import { ElMessage } from 'element-plus'
+import { shouldShowDisclaimer } from './disclaimer'
+
+const DISCLAIMER_AGREED_AT_KEY = 'vohive_disclaimer_agreed_at'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -35,23 +38,24 @@ onMounted(() => {
   }
 })
 
-// 监听登录状态，每次登录后弹窗
+// 监听登录状态，每周首次登录弹一次（同意状态持久化在 localStorage，
+// 跨会话/跨标签页生效，距上次同意满一周后再次登录才会重新弹出）
 watch(() => auth.isAuthenticated, (isAuthenticated) => {
   if (isAuthenticated) {
-    const agreed = sessionStorage.getItem('vohive_disclaimer_agreed')
-    if (agreed !== 'true') {
+    const agreedAtRaw = localStorage.getItem(DISCLAIMER_AGREED_AT_KEY)
+    const agreedAt = agreedAtRaw === null ? null : Number(agreedAtRaw)
+    if (shouldShowDisclaimer(agreedAt, Date.now())) {
       confirmText.value = ''
       showDisclaimer.value = true
     }
   } else {
-    sessionStorage.removeItem('vohive_disclaimer_agreed')
     showDisclaimer.value = false
   }
 }, { immediate: true })
 
 function acceptDisclaimer() {
   if (!canAccept.value) return
-  sessionStorage.setItem('vohive_disclaimer_agreed', 'true')
+  localStorage.setItem(DISCLAIMER_AGREED_AT_KEY, String(Date.now()))
   showDisclaimer.value = false
 }
 
