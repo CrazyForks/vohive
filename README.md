@@ -27,7 +27,7 @@ VoHive 把模组热插拔管理、SOCKS5/HTTP 代理编排、短信收发、VoWi
 
 ## 架构与技术栈
 
-- **Backend**:Go 1.26+(Gin、GORM、Viper、sipgo、euicc-go)
+- **Backend**:Go 1.26+(Gin、GORM、Viper、euicc-go)
 - **Frontend**:Vue 3 + Vite + TailwindCSS + Element Plus
 - **Database**:SQLite(`vohive.db`)
 - **CI/CD**:GitHub Actions 自动化多架构 Docker 镜像构建与发布

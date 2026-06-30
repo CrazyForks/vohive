@@ -11,8 +11,6 @@ import (
 	"github.com/iniwex5/vohive/internal/backend"
 	"github.com/iniwex5/vohive/internal/config"
 	"github.com/iniwex5/vohive/internal/modem"
-	qmicore "github.com/iniwex5/vohive/internal/qmi"
-	"github.com/iniwex5/vohive/internal/sipgw"
 	"github.com/iniwex5/vohive/internal/vowifihost"
 	"github.com/iniwex5/vowifi-go/runtimehost"
 	"github.com/iniwex5/vowifi-go/runtimehost/identity"
@@ -286,40 +284,6 @@ func TestCleanupWorkerStartupSIMAuthLogicalChannelsATFallbackContinuesAfterClose
 			t.Fatalf("closed channels = %v, want %v", backendStub.closeLogicalChannels, want)
 		}
 	}
-}
-
-func TestNewCSCallManagerForWorkerSkipsQMIWithoutCore(t *testing.T) {
-	r, err := sipgw.NewRegistrar(sipgw.DefaultConfig())
-	if err != nil {
-		t.Fatalf("NewRegistrar() error=%v", err)
-	}
-	w := &Worker{
-		ID:      "dev-qmi",
-		Config:  config.DeviceConfig{ID: "dev-qmi", AudioDevice: "hw:1,0"},
-		Backend: &workerStatusBackendStub{mode: backend.BackendQMI},
-	}
-	if mgr := newCSCallManagerForWorker(w, r); mgr != nil {
-		t.Fatalf("manager=%v want nil without QMI core", mgr)
-	}
-}
-
-func TestNewCSCallManagerForWorkerCreatesQMIManagerWithCore(t *testing.T) {
-	r, err := sipgw.NewRegistrar(sipgw.DefaultConfig())
-	if err != nil {
-		t.Fatalf("NewRegistrar() error=%v", err)
-	}
-	qmiCore := qmicore.New(config.DeviceConfig{ID: "dev-qmi", DeviceBackend: backend.BackendQMI}, nil)
-	w := &Worker{
-		ID:      "dev-qmi",
-		Config:  config.DeviceConfig{ID: "dev-qmi", AudioDevice: "hw:1,0"},
-		Backend: &workerStatusBackendStub{mode: backend.BackendQMI},
-		QMICore: qmiCore,
-	}
-	mgr := newCSCallManagerForWorker(w, r)
-	if mgr == nil {
-		t.Fatal("manager=nil want QMI CS call manager")
-	}
-	mgr.Stop()
 }
 
 func TestNewWorkerBackendStrictDoesNotFallbackFromQMIToAT(t *testing.T) {

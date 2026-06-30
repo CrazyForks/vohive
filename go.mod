@@ -4,12 +4,9 @@ go 1.26.3
 
 require (
 	github.com/damonto/euicc-go v1.1.3-0.20260628013808-8d873a2dfc98
-	github.com/ebfe/scard v0.0.0-20241214075232-7af069cabc25
-	github.com/emiago/sipgo v1.4.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
-	github.com/google/uuid v1.6.0
 	github.com/iniwex5/netlink v1.3.3
 	github.com/iniwex5/qqbot v1.0.1
 	github.com/iniwex5/quectel-qmi-go v0.6.0
@@ -51,6 +48,7 @@ require (
 	github.com/damonto/uicc-go v0.0.0-20260622025011-5cf36d6c8626 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/emiago/sipgo v1.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
@@ -66,6 +64,7 @@ require (
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/pprof v0.0.0-20231101202521-4ca4178f5c7a // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/icholy/digest v1.1.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
