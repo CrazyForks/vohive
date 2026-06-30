@@ -47,3 +47,18 @@ func TestLoginRateLimitIgnoresSpoofedForwardedFor(t *testing.T) {
 		t.Fatalf("11th attempt: code=%d want 429 —— 限流应按真实 RemoteAddr 计数，不应被伪造的 X-Forwarded-For 绕过, body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestCheckPasswordPlaintextFallbackStillMatchesCorrectly(t *testing.T) {
+	if !checkPassword("plain-secret", "plain-secret") {
+		t.Fatal("相同的明文密码应当匹配")
+	}
+	if checkPassword("plain-secret", "wrong-secret") {
+		t.Fatal("不同明文密码不应匹配")
+	}
+	if checkPassword("plain-secret", "plain-secre") {
+		t.Fatal("长度不同的明文密码不应匹配")
+	}
+	if checkPassword("plain-secret", "") {
+		t.Fatal("空密码不应匹配非空存储密码")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -133,8 +134,8 @@ func checkPassword(stored, input string) bool {
 		err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(input))
 		return err == nil
 	}
-	// 向后兼容：明文密码对比
-	return stored == input
+	// 向后兼容：明文密码对比（常量时间，避免逐字节时序侧信道）
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(input)) == 1
 }
 
 func (s *Server) issueSessionToken() (string, time.Time, error) {
