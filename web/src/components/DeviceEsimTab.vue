@@ -6,6 +6,7 @@ import { devicesService } from '../services/devices'
 import { errorMessage } from '../services/http'
 import { api } from '../stores/auth'
 import { useSensitiveVisibility } from '../composables/useSensitiveVisibility'
+import EsimCardPolicyInline from './EsimCardPolicyInline.vue'
 import { applyOptimisticActiveState } from './deviceEsimOptimistic'
 import { pickNextDownloadAid } from './deviceEsimOverviewRefresh'
 import { describeDeleteResultNotice, describeDownloadTerminalNotice, describeSpaceDelta } from './deviceEsimOperationNotice'
@@ -32,6 +33,7 @@ const props = defineProps<{
   deviceId: string
   deviceImei?: string
   isActive?: boolean
+  deviceOnline?: boolean
 }>()
 
 // 数据状态
@@ -46,6 +48,11 @@ const deleting = ref<string | null>(null)
 const renaming = ref<string | null>(null)
 const showSensitive = useSensitiveVisibility()
 const renameValue = ref('')
+// 行内卡策略展开态（手风琴，一次只展开一行，按 iccid 记）
+const expandedPolicyIccid = ref<string | null>(null)
+function togglePolicyPanel(iccid: string) {
+  expandedPolicyIccid.value = expandedPolicyIccid.value === iccid ? null : iccid
+}
 const notifications = ref<EsimNotificationItem[]>([])
 const notificationsLoading = ref(false)
 const notificationsDialogOpen = ref(false)
@@ -432,6 +439,7 @@ watch(
     if (fetchAbortController) {
       fetchAbortController.abort()
     }
+    expandedPolicyIccid.value = null
     if (!newId || !newActive) return
 
     clearRecentSpaceDelta()
@@ -587,9 +595,8 @@ onBeforeUnmount(() => {
         暂无 Profile
       </div>
       <div v-else class="divide-y divide-gray-100 dark:divide-white/10">
+        <template v-for="p in group.profiles" :key="p.iccid">
         <div
-          v-for="p in group.profiles"
-          :key="p.iccid"
           class="px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors"
         >
           <div class="min-w-0 flex-1">
@@ -647,6 +654,14 @@ onBeforeUnmount(() => {
             </el-button>
             <el-button
               size="small"
+              :type="expandedPolicyIccid === p.iccid ? 'primary' : 'default'"
+              @click="togglePolicyPanel(p.iccid)"
+              plain
+            >
+              策略
+            </el-button>
+            <el-button
+              size="small"
               type="danger"
               :loading="deleting === p.iccid"
               @click="deleteProfile(p.iccid, p.name, group.aid_hex)"
@@ -656,6 +671,16 @@ onBeforeUnmount(() => {
             </el-button>
           </div>
         </div>
+          <div v-if="expandedPolicyIccid === p.iccid" class="px-4 pb-3 border-t-0">
+            <EsimCardPolicyInline
+              :device-id="props.deviceId"
+              :iccid="p.iccid"
+              :is-active-card="p.state === 1"
+              :device-online="props.deviceOnline === true"
+              @policy-changed="fetchOverview(true)"
+            />
+          </div>
+        </template>
       </div>
     </div>
 

@@ -63,10 +63,11 @@ func (s *Server) handleListCardPolicies(c *gin.Context) {
 func (s *Server) handlePutCardPolicy(c *gin.Context) {
 	iccid := c.Param("iccid")
 	var req struct {
-		NetworkEnabled *bool  `json:"network_enabled"`
-		VoWiFiEnabled  *bool  `json:"vowifi_enabled"`
-		IPVersion      string `json:"ip_version"`
-		APN            string `json:"apn"`
+		NetworkEnabled  *bool  `json:"network_enabled"`
+		VoWiFiEnabled   *bool  `json:"vowifi_enabled"`
+		AirplaneEnabled *bool  `json:"airplane_enabled"`
+		IPVersion       string `json:"ip_version"`
+		APN             string `json:"apn"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -84,6 +85,9 @@ func (s *Server) handlePutCardPolicy(c *gin.Context) {
 	}
 	if req.VoWiFiEnabled != nil {
 		pol.VoWiFiEnabled = *req.VoWiFiEnabled
+	}
+	if req.AirplaneEnabled != nil {
+		pol.AirplaneEnabled = *req.AirplaneEnabled
 	}
 	if req.IPVersion != "" {
 		pol.IPVersion = req.IPVersion

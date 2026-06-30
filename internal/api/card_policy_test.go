@@ -244,3 +244,31 @@ func TestPatchCardPolicyAirplaneMutualExclusion(t *testing.T) {
 		t.Fatalf("开飞行应互斥关 network/vowifi: %+v", got)
 	}
 }
+
+func TestPutCardPolicyAirplaneField(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	openTestDB(t)
+	// 预置一行 network=true，验证只 PUT airplane 时 network 不被指针语义覆盖
+	_ = db.UpsertCardPolicy(db.CardPolicy{ICCID: "8986air777", NetworkEnabled: true, IPVersion: "v4", Source: "user"})
+
+	s := &Server{pool: device.NewPool(&config.Config{})}
+	r := gin.Default()
+	r.PUT("/api/cards/:iccid/policy", s.handlePutCardPolicy)
+
+	body := `{"airplane_enabled":true}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/cards/8986air777/policy", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	got, _ := db.GetCardPolicy("8986air777")
+	if !got.AirplaneEnabled {
+		t.Fatalf("airplane 未写入: %+v", got)
+	}
+	if !got.NetworkEnabled {
+		t.Fatalf("未传的 network 被错误覆盖: %+v", got)
+	}
+}

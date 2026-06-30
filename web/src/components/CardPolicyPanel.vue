@@ -4,6 +4,7 @@ import { Sim24Regular } from '@vicons/fluent'
 import { Loading } from '@element-plus/icons-vue'
 import type { CardPolicy } from '../types/api'
 import { devicesService } from '../services/devices'
+import { useCardPolicyToggles, type PolicyMirror } from '../composables/useCardPolicyToggles'
 
 const props = defineProps<{
   deviceId: string | undefined
@@ -16,127 +17,75 @@ const emit = defineEmits<{
   policyChanged: []
 }>()
 
-// 本地镜像（跟上游 policy 同步）。airplane 直接镜像存储的“用户飞行意图”，
-// 与 vowifi 解耦：开 VoWiFi 不再把飞行开关显示成关（VoWiFi 接管时开关仍点亮但禁用），
-// 关掉 VoWiFi 后按该意图回退（之前飞行回飞行，否则回在线）。
-const local = ref<{
-  network_enabled: boolean
-  vowifi_enabled: boolean
-  airplane_enabled: boolean
-  ip_version: 'v4' | 'v6' | 'v4v6'
-  apn: string
-}>({ network_enabled: false, vowifi_enabled: false, airplane_enabled: false, ip_version: 'v4', apn: '' })
+// ip/apn 仍由本组件独立持有（不进 composable）
+const ipVersion = ref<'v4' | 'v6' | 'v4v6'>('v4')
+const apn = ref('')
 
-// 各开关的热切换中间态（pending/failed）
-const networkPending = ref(false)
-const networkFailed = ref(false)
-const vowifiPending = ref(false)
-const vowifiFailed = ref(false)
-const airplanePending = ref(false)
-const airplaneFailed = ref(false)
+const canToggle = computed(() => props.deviceOnline && !!props.iccid)
 
-// 上游 policy 变化时原地同步各字段（不整体替换对象，避免 el-switch 崩溃）
+// 上游 policy → 三开关镜像（喂给 composable）
+const mirror = computed<PolicyMirror | null>(() =>
+  props.policy
+    ? {
+        network_enabled: props.policy.network_enabled,
+        vowifi_enabled: props.policy.vowifi_enabled,
+        airplane_enabled: props.policy.airplane_enabled
+      }
+    : null
+)
+
+// 同步 ip/apn（这两项不参与 composable）
 watch(
   () => props.policy,
   (p) => {
     if (!p) return
-    local.value.network_enabled = p.network_enabled
-    local.value.vowifi_enabled = p.vowifi_enabled
-    // 直接镜像存储的飞行意图（VoWiFi 开启时也如实点亮，开关由 vowifi 禁用）
-    local.value.airplane_enabled = p.airplane_enabled
-    local.value.ip_version = p.ip_version || 'v4'
-    local.value.apn = p.apn || ''
-    networkFailed.value = false
-    vowifiFailed.value = false
-    airplaneFailed.value = false
+    ipVersion.value = p.ip_version || 'v4'
+    apn.value = p.apn || ''
   },
   { immediate: true }
 )
+
+// live 执行器：调设备动作端点，即时生效。network 携带本组件的 ip/apn。
+const {
+  local,
+  networkPending,
+  networkFailed,
+  vowifiPending,
+  vowifiFailed,
+  airplanePending,
+  airplaneFailed,
+  onNetworkToggle,
+  onVoWiFiToggle,
+  onAirplaneToggle
+} = useCardPolicyToggles(mirror, {
+  async applyNetwork(enabled) {
+    if (!props.deviceId) return { ok: false }
+    const r = enabled
+      ? await devicesService.startNetwork(props.deviceId, { ip_version: ipVersion.value, apn: apn.value })
+      : await devicesService.stopNetwork(props.deviceId)
+    return { ok: r.ok }
+  },
+  async applyVoWiFi(enabled) {
+    if (!props.deviceId) return { ok: false }
+    const r = enabled
+      ? await devicesService.enableVoWiFi(props.deviceId)
+      : await devicesService.disableVoWiFi(props.deviceId)
+    return { ok: r.ok }
+  },
+  async applyAirplane(enabled) {
+    if (!props.deviceId) return { ok: false }
+    const r = await devicesService.setFlightMode(props.deviceId, enabled)
+    return { ok: r.ok }
+  },
+  onChanged() {
+    emit('policyChanged')
+  }
+})
 
 const sourceLabel = computed(() => {
   if (!props.policy) return ''
   return props.policy.source === 'user' ? '手动设置' : '自动默认'
 })
-
-const canToggle = computed(() => props.deviceOnline && !!props.iccid)
-
-async function onNetworkToggle(rawVal: string | number | boolean) {
-  const val = rawVal as boolean
-  if (!props.deviceId || !canToggle.value) return
-  networkPending.value = true
-  networkFailed.value = false
-  const prev = !val
-  let result
-  if (val) {
-    result = await devicesService.startNetwork(props.deviceId, {
-      ip_version: local.value.ip_version,
-      apn: local.value.apn
-    })
-  } else {
-    result = await devicesService.stopNetwork(props.deviceId)
-  }
-  networkPending.value = false
-  if (!result.ok) {
-    local.value.network_enabled = prev
-    networkFailed.value = true
-  } else {
-    networkFailed.value = false
-    // 开网络与 vowifi/飞行互斥（后端已互斥落库，这里同步 UI）
-    if (val) {
-      local.value.vowifi_enabled = false
-      local.value.airplane_enabled = false
-    }
-    emit('policyChanged')
-  }
-}
-
-async function onVoWiFiToggle(rawVal: string | number | boolean) {
-  const val = rawVal as boolean
-  if (!props.deviceId || !canToggle.value) return
-  vowifiPending.value = true
-  vowifiFailed.value = false
-  const prev = !val
-  let result
-  if (val) {
-    result = await devicesService.enableVoWiFi(props.deviceId)
-  } else {
-    result = await devicesService.disableVoWiFi(props.deviceId)
-  }
-  vowifiPending.value = false
-  if (!result.ok) {
-    local.value.vowifi_enabled = prev
-    vowifiFailed.value = true
-  } else {
-    vowifiFailed.value = false
-    // 开 VoWiFi：仅互斥关网络；不动飞行意图（保留用户飞行态，关 VoWiFi 后据此回退）
-    if (val) {
-      local.value.network_enabled = false
-    }
-    emit('policyChanged')
-  }
-}
-
-async function onAirplaneToggle(rawVal: string | number | boolean) {
-  const val = rawVal as boolean
-  if (!props.deviceId || !canToggle.value) return
-  airplanePending.value = true
-  airplaneFailed.value = false
-  const prev = !val
-  const result = await devicesService.setFlightMode(props.deviceId, val)
-  airplanePending.value = false
-  if (!result.ok) {
-    local.value.airplane_enabled = prev
-    airplaneFailed.value = true
-  } else {
-    airplaneFailed.value = false
-    // 开飞行与网络/vowifi 互斥（后端已互斥落库，这里同步 UI）
-    if (val) {
-      local.value.network_enabled = false
-      local.value.vowifi_enabled = false
-    }
-    emit('policyChanged')
-  }
-}
 </script>
 
 <template>
@@ -177,7 +126,7 @@ async function onAirplaneToggle(rawVal: string | number | boolean) {
                 <!-- IP 版本 -->
         <div class="space-y-1">
           <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">IP 版本</label>
-          <el-select v-model="local.ip_version" class="w-full" :disabled="!canToggle">
+          <el-select v-model="ipVersion" class="w-full" :disabled="!canToggle">
             <el-option label="IPv4" value="v4" />
             <el-option label="IPv6" value="v6" />
             <el-option label="IPv4 + IPv6（双栈）" value="v4v6" />
@@ -188,7 +137,7 @@ async function onAirplaneToggle(rawVal: string | number | boolean) {
         <!-- APN -->
         <div class="space-y-1">
           <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">APN（可选）</label>
-          <el-input v-model="local.apn" placeholder="留空自动识别" :disabled="!canToggle" />
+          <el-input v-model="apn" placeholder="留空自动识别" :disabled="!canToggle" />
           <div class="text-xs text-gray-400">下次开启网络时生效</div>
         </div>
         <!-- 开启网络 -->

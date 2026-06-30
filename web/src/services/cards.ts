@@ -5,6 +5,7 @@ import type { CardPolicy } from '../types/api'
 type PutCardPolicyRequest = {
   network_enabled?: boolean
   vowifi_enabled?: boolean
+  airplane_enabled?: boolean
   ip_version?: string
   apn?: string
 }
