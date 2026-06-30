@@ -217,3 +217,31 @@ func TestSessionExpires(t *testing.T) {
 		t.Fatalf("Get expired err=%v, want ErrNotFound", err)
 	}
 }
+
+func TestSafeDialControlRejectsLoopbackAtDialTime(t *testing.T) {
+	control := safeDialControl(false)
+	if err := control("tcp4", "127.0.0.1:443", nil); err == nil {
+		t.Fatal("拨号到回环地址应当被拒绝，即便更早的 URL 阶段校验已经通过")
+	}
+}
+
+func TestSafeDialControlRejectsPrivateRangeAtDialTime(t *testing.T) {
+	control := safeDialControl(false)
+	if err := control("tcp4", "10.1.2.3:443", nil); err == nil {
+		t.Fatal("拨号到内网地址应当被拒绝")
+	}
+}
+
+func TestSafeDialControlAllowsPublicAddress(t *testing.T) {
+	control := safeDialControl(false)
+	if err := control("tcp4", "203.0.113.10:443", nil); err != nil {
+		t.Fatalf("拨号到公网地址不应被拒绝: %v", err)
+	}
+}
+
+func TestSafeDialControlAllowsPrivateWhenConfigured(t *testing.T) {
+	control := safeDialControl(true)
+	if err := control("tcp4", "127.0.0.1:443", nil); err != nil {
+		t.Fatalf("allowPrivateHosts=true 时应放行内网地址: %v", err)
+	}
+}

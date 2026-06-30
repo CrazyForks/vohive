@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -165,6 +166,12 @@ func (b *Broker) Create(ctx context.Context, req Request) (*Session, error) {
 	session.client = &http.Client{
 		Jar:     jar,
 		Timeout: defaultClientTimeout,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 10 * time.Second,
+				Control: safeDialControl(b.allowPrivateHosts),
+			}).DialContext,
+		},
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			_, err := parseAllowedURL(r.Context(), r.URL.String(), b.allowPrivateHosts)
 			return err
@@ -691,6 +698,35 @@ func unsafeIP(ip netip.Addr) bool {
 		ip.IsLinkLocalMulticast() ||
 		ip.IsMulticast() ||
 		ip.IsUnspecified()
+}
+
+// safeDialControl 返回一个 net.Dialer.Control 回调，在 TCP 连接真正建立
+// 之前（即 DNS 解析之后、connect(2) 之前）对目标 IP 再次校验。
+// parseAllowedURL 只在请求发起前校验一次解析结果，如果目标域名在那之后、
+// 真正拨号之前被 DNS rebinding 成内网地址，标准库 Transport 会在连接阶段
+// 重新解析并直接绕过之前的校验；Control 回调和实际拨号之间没有时间窗口，
+// 能彻底堵住这个 TOCTOU 漏洞。
+func safeDialControl(allowPrivate bool) func(network, address string, c syscall.RawConn) error {
+	return func(network, address string, _ syscall.RawConn) error {
+		if allowPrivate {
+			return nil
+		}
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return fmt.Errorf("%w: invalid dial address %q", ErrUnsafeURL, address)
+		}
+		if isLocalHostname(host) {
+			return fmt.Errorf("%w: local host %q", ErrUnsafeURL, host)
+		}
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
+			return fmt.Errorf("%w: dial address is not an IP %q", ErrUnsafeURL, host)
+		}
+		if unsafeIP(ip.Unmap()) {
+			return fmt.Errorf("%w: private address %q", ErrUnsafeURL, host)
+		}
+		return nil
+	}
 }
 
 func appendRawQuery(target *url.URL, raw string) {
