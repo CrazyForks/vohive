@@ -65,7 +65,19 @@ func (s *Server) handleApplyUpdate(c *gin.Context) {
 }
 
 // handleUninstall 自毁/卸载接口，用于用户拒绝免责声明时
+// 必须登录后才能调用——这是真正会删数据、删配置、删自身可执行文件并
+// os.Exit(0) 的破坏性操作，绝不能允许未鉴权请求触发。
 func (s *Server) handleUninstall(c *gin.Context) {
+	if !s.isAuthenticatedRequest(c, time.Now()) {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status":     "error",
+			"code":       "unauthorized",
+			"message":    "未授权",
+			"request_id": requestID(c),
+		})
+		return
+	}
+
 	logger.Warn("用户拒绝了免责声明，正在触发自毁/卸载逻辑")
 	c.JSON(http.StatusOK, gin.H{"message": "正在卸载软件..."})
 

@@ -1,6 +1,13 @@
 package api
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/iniwex5/vohive/internal/config"
+)
 
 // resolveUninstallTargets 必须使用运行时实际加载的配置文件路径，
 // 而不是硬编码相对路径 "config"——后者在 OpenWrt 部署下（通过 -c 传入
@@ -80,5 +87,34 @@ func TestDetectServiceStopCommandsEmptyWhenNoSupervisorDetected(t *testing.T) {
 
 	if len(cmds) != 0 {
 		t.Fatalf("cmds = %v, want empty when neither systemd nor openwrt detected", cmds)
+	}
+}
+
+func TestHandleUninstallRejectsUnauthenticatedRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{auth: config.WebConfig{Username: "admin", Password: "secret"}}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/system/uninstall", nil)
+
+	s.handleUninstall(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d body=%s, want 401 —— uninstall 必须要求登录后才能调用", w.Code, w.Body.String())
+	}
+}
+
+func TestNewRouterRequiresAuthForUninstall(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{auth: config.WebConfig{Username: "admin", Password: "secret"}}
+	r := s.newRouter()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/system/uninstall", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("code=%d body=%s, want 401", w.Code, w.Body.String())
 	}
 }
